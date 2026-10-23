@@ -1,0 +1,194 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2a1a0e">
+<title>Käfer Monitor</title>
+<style>
+body{margin:0;padding:12px;background:#2a1a0e;
+ background-image:repeating-linear-gradient(45deg,#2f1e11 0 6px,#2a1a0e 6px 12px);
+ color:#f0e2bd;font-family:Georgia,"Times New Roman",serif;text-align:center}
+h1{margin:10px 0 0;font-size:1.3em;letter-spacing:5px;color:#e8c872;text-transform:uppercase}
+.sub{font-size:.75em;color:#a8946a;letter-spacing:2px;margin-bottom:8px}
+#btn{background:#3a2616;color:#ffb347;border:2px solid #c9b27a;border-radius:6px;padding:12px 28px;
+ font:inherit;font-size:1.1em;letter-spacing:3px;text-transform:uppercase;margin:12px 0}
+#btn:active{background:#5a3a1e}
+#btn.weg{display:none}
+.g{width:min(78vw,300px);margin:14px auto;filter:drop-shadow(0 6px 8px #000)}
+.c{width:min(92vw,360px);margin:16px auto;background:#1b110a;border:1px solid #7a6540;border-radius:8px;padding:8px 8px 4px;box-sizing:border-box}
+svg{width:100%;display:block}
+.lbl{fill:#c9b27a;font-size:10px;letter-spacing:2px}
+.val{fill:#ffb347;font-size:22px;font-weight:bold;font-family:"Courier New",monospace}
+.tk{fill:#e8dcc0;font-size:9px}
+.ax{fill:#a8946a;font-size:9px;font-family:"Courier New",monospace}
+.nd{transition:transform .8s cubic-bezier(.3,1.4,.5,1);transform-origin:100px 100px}
+.alarm .val{fill:#ff3b30;animation:b .6s infinite}
+@keyframes b{50%{opacity:.2}}
+#st{font-size:.8em;color:#a8946a;margin-top:6px}
+@media (orientation:landscape){
+ body{padding:6px 10px}
+ h1{margin:2px 0 0;font-size:1.05em;letter-spacing:4px}
+ .sub{display:none}
+ #btn{margin:6px 0;padding:8px 24px}
+ .gs{display:flex;justify-content:center;align-items:center;gap:1.5vw}
+ .g{width:min(30vw,74vh);margin:6px 0}
+ .c{width:min(70vw,520px);margin:10px auto}
+}
+</style></head><body>
+<h1>Käfer</h1><div class="sub">— ÜBERWACHUNG —</div>
+<button id="btn" onclick="verbinden()">Verbinden</button>
+<div class="gs">
+<div class="g" id="gr"></div>
+<div class="g" id="gt"></div>
+<div class="g" id="gd"></div>
+</div>
+<div class="c"><svg viewBox="0 0 300 118">
+<text class="lbl" x="38" y="9">ÖLTEMP. VERLAUF · 60 S</text>
+<line x1="38" y1="22" x2="288" y2="22" stroke="#3a2616"/>
+<line x1="38" y1="56" x2="288" y2="56" stroke="#3a2616"/>
+<line x1="38" y1="90" x2="288" y2="90" stroke="#5a4528"/>
+<line x1="38" y1="22" x2="38" y2="90" stroke="#5a4528"/>
+<line x1="163" y1="22" x2="163" y2="90" stroke="#3a2616"/>
+<line x1="288" y1="22" x2="288" y2="90" stroke="#3a2616"/>
+<line id="lim" x1="38" y1="22" x2="288" y2="22" stroke="#ff3b30" stroke-dasharray="4 3" style="display:none"/>
+<path id="kp" d="" fill="none" stroke="#ffb347" stroke-width="2" stroke-linejoin="round"/>
+<text class="ax" id="hi" x="34" y="25" text-anchor="end">--</text>
+<text class="ax" id="mi" x="34" y="59" text-anchor="end">--</text>
+<text class="ax" id="lo" x="34" y="93" text-anchor="end">--</text>
+<text class="ax" x="38" y="108">−60 s</text>
+<text class="ax" x="163" y="108" text-anchor="middle">−30 s</text>
+<text class="ax" x="288" y="108" text-anchor="end">jetzt</text>
+</svg></div>
+<div id="st">Nicht verbunden</div>
+
+<script>
+const SERVICE = '6f2a0001-8c3e-4f5b-9a7d-1e2f3a4b5c6d';
+const CHAR    = '6f2a0002-8c3e-4f5b-9a7d-1e2f3a4b5c6d';
+
+const TEMP_ALARM  = 140;   // °C
+const DRUCK_ALARM = 1.0;   // bar
+const RPM_ALARM   = 4800;  // U/min
+
+function gauge(id,label,max,step,minor,div){
+  let s='<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="97" fill="#bfbfbf"/>'+
+   '<circle cx="100" cy="100" r="93" fill="#6b6b6b"/><circle cx="100" cy="100" r="88" fill="#141210"/>';
+  const n=max/step;
+  for(let i=0;i<=n;i++){
+    const a=-120+240*i/n, r=a*Math.PI/180;
+    s+='<line x1="100" y1="16" x2="100" y2="27" stroke="#e8dcc0" stroke-width="2" transform="rotate('+a+' 100 100)"/>';
+    s+='<text class="tk" text-anchor="middle" x="'+(100+66*Math.sin(r))+'" y="'+(103-66*Math.cos(r))+'">'+(i*step/div)+'</text>';
+    if(i<n&&minor) for(let k=1;k<minor;k++){
+      const b=a+240/n*k/minor;
+      s+='<line x1="100" y1="16" x2="100" y2="21" stroke="#a8946a" stroke-width="1" transform="rotate('+b+' 100 100)"/>';
+    }
+  }
+  s+='<text class="lbl" text-anchor="middle" x="100" y="138">'+label+'</text>'+
+   '<text class="val" id="'+id+'v" text-anchor="middle" x="100" y="162">--</text>'+
+   '<g class="nd" id="'+id+'n" style="transform:rotate(-120deg)"><line x1="100" y1="112" x2="100" y2="24" stroke="#ff6a2b" stroke-width="3" stroke-linecap="round"/></g>'+
+   '<circle cx="100" cy="100" r="8" fill="#9a9a9a" stroke="#444"/></svg>';
+  document.getElementById('g'+id).innerHTML=s;
+}
+gauge('r','U/MIN × 1000',6000,1000,2,1000);
+gauge('t','ÖLTEMP. °C',150,25,5,1);
+gauge('d','ÖLDRUCK BAR',8,1,2,1);
+
+function setG(id,val,max,txt,alarm){
+  const v=(val===null)?0:Math.max(0,Math.min(max,val));
+  document.getElementById(id+'n').style.transform='rotate('+(-120+240*v/max)+'deg)';
+  document.getElementById(id+'v').textContent=txt;
+  document.getElementById('g'+id).className='g'+(alarm?' alarm':'');
+}
+
+function chart(h){
+  h=Array(60-h.length).fill(null).concat(h);
+  let lo=1e9,hi=-1e9;
+  h.forEach(x=>{if(x!==null){lo=Math.min(lo,x);hi=Math.max(hi,x);}});
+  if(lo>hi)return;
+  if(hi-lo<20){const m=(hi+lo)/2;lo=m-10;hi=m+10;}
+  lo=Math.floor(lo);hi=Math.ceil(hi);
+  let d='',pen=false;
+  for(let i=0;i<60;i++){
+    const x=h[i];
+    if(x===null){pen=false;continue;}
+    d+=(pen?'L':'M')+(38+250*i/59).toFixed(1)+' '+(90-68*(x-lo)/(hi-lo)).toFixed(1);
+    pen=true;
+  }
+  document.getElementById('kp').setAttribute('d',d);
+  document.getElementById('hi').textContent=hi;
+  document.getElementById('mi').textContent=Math.round((hi+lo)/2);
+  document.getElementById('lo').textContent=lo;
+  const L=document.getElementById('lim');
+  if(TEMP_ALARM>=lo&&TEMP_ALARM<=hi){
+    const y=(90-68*(TEMP_ALARM-lo)/(hi-lo)).toFixed(1);
+    L.setAttribute('y1',y);L.setAttribute('y2',y);L.style.display='';
+  } else L.style.display='none';
+}
+
+// ---------- Bluetooth ----------
+let dev=null, hist=[];
+const btn=document.getElementById('btn');
+const st=document.getElementById('st');
+
+if(!navigator.bluetooth){
+  st.textContent='Web Bluetooth nicht verfügbar – bitte Chrome auf Android über HTTPS nutzen.';
+  btn.disabled=true;
+}
+
+async function wach(){
+  try{await navigator.wakeLock.request('screen');}catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&dev&&dev.gatt.connected)wach();
+});
+
+async function verbinden(){
+  try{
+    if(!dev){
+      dev=await navigator.bluetooth.requestDevice({
+        filters:[{namePrefix:'Kaefer'}],
+        optionalServices:[SERVICE]
+      });
+      dev.addEventListener('gattserverdisconnected',onGetrennt);
+    }
+    await koppeln();
+  }catch(e){
+    st.textContent='○ '+e.message;
+  }
+}
+
+async function koppeln(){
+  st.textContent='Verbinde …';
+  const srv=await dev.gatt.connect();
+  const svc=await srv.getPrimaryService(SERVICE);
+  const ch=await svc.getCharacteristic(CHAR);
+  ch.addEventListener('characteristicvaluechanged',onData);
+  await ch.startNotifications();
+  st.textContent='● Verbunden';
+  btn.classList.add('weg');
+  wach();
+}
+
+function onGetrennt(){
+  st.textContent='○ Getrennt – verbinde neu …';
+  setTimeout(neuVerbinden,2000);
+}
+
+async function neuVerbinden(){
+  try{await koppeln();}
+  catch(e){
+    st.textContent='○ Keine Verbindung';
+    btn.classList.remove('weg');
+    setTimeout(neuVerbinden,3000);
+  }
+}
+
+function onData(e){
+  const p=new TextDecoder().decode(e.target.value).split(',');
+  const n=i=>{const v=parseFloat(p[i]);return isNaN(v)?null:v;};
+  const t=n(0), d=n(1), r=n(2);
+  setG('r',r,6000,r===null?'--':String(Math.round(r/10)*10),r!==null&&r>=RPM_ALARM);
+  setG('t',t,150,t===null?'FEHLER':t.toFixed(0)+' °C',t!==null&&t>=TEMP_ALARM);
+  setG('d',d,8,d===null?'FEHLER':d.toFixed(1)+' bar',d!==null&&d<DRUCK_ALARM);
+  hist.push(t);
+  if(hist.length>60)hist.shift();
+  chart(hist);
+}
+</script></body></html>
